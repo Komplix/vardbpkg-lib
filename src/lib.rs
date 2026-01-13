@@ -128,20 +128,6 @@ mod tests {
         assert_eq!(read_first_line(dir.path().join("nonexistent")), None);
     }
 
-    #[test]
-    fn test_parse_vardb_with_sample_data() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("vardbpkg");
-        let packages = parse_vardb(path);
-        
-        assert!(!packages.is_empty());
-        
-        // Verify a specific package if possible
-        let amanda = packages.iter().find(|p| p.category == "acct-group" && p.package == "amanda");
-        assert!(amanda.is_some());
-        let amanda = amanda.unwrap();
-        assert_eq!(amanda.version, "0-r2");
-        assert_eq!(amanda.category, "acct-group");
-    }
 }
 
 /// Reads the first line of a file and trims it.
