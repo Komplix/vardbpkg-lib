@@ -17,6 +17,9 @@ pub struct VarDbPkg {
     pub rdepend: String,
     pub repository: String,
     pub slot: String,
+    pub usepkg: String,
+    pub eapi: String,
+    pub binpkgmd5: String,
 }
 
 /// Parses the entire vardb at the given path.
@@ -30,13 +33,15 @@ pub fn parse_vardb<P: AsRef<Path>>(path: P) -> Vec<VarDbPkg> {
             let category_path = entry.path();
             if category_path.is_dir() {
                 let category_name = entry.file_name().to_string_lossy().into_owned();
-                
+
                 if let Ok(pkg_entries) = fs::read_dir(&category_path) {
                     for pkg_entry in pkg_entries.flatten() {
                         let pkg_path = pkg_entry.path();
                         if pkg_path.is_dir() {
                             let pkg_dir_name = pkg_entry.file_name().to_string_lossy().into_owned();
-                            if let Some(pkg_info) = parse_package_dir(&category_name, &pkg_dir_name, &pkg_path) {
+                            if let Some(pkg_info) =
+                                parse_package_dir(&category_name, &pkg_dir_name, &pkg_path)
+                            {
                                 packages.push(pkg_info);
                             }
                         }
@@ -51,7 +56,7 @@ pub fn parse_vardb<P: AsRef<Path>>(path: P) -> Vec<VarDbPkg> {
 
 fn parse_package_dir(category: &str, dir_name: &str, path: &Path) -> Option<VarDbPkg> {
     let (package_name, version) = split_package_version(dir_name);
-    
+
     let mut pkg = VarDbPkg {
         category: category.to_string(),
         package: package_name,
@@ -68,6 +73,9 @@ fn parse_package_dir(category: &str, dir_name: &str, path: &Path) -> Option<VarD
     pkg.rdepend = read_first_line(path.join("RDEPEND")).unwrap_or_default();
     pkg.repository = read_first_line(path.join("repository")).unwrap_or_default();
     pkg.slot = read_first_line(path.join("SLOT")).unwrap_or_default();
+    pkg.usepkg = read_first_line(path.join("USE")).unwrap_or_default();
+    pkg.eapi = read_first_line(path.join("EAPI")).unwrap_or_default();
+    pkg.binpkgmd5 = read_first_line(path.join("BINPKGMD5")).unwrap_or_default();
 
     Some(pkg)
 }
@@ -76,7 +84,7 @@ fn parse_package_dir(category: &str, dir_name: &str, path: &Path) -> Option<VarD
 /// Gentoo package directories are named as `package-version`.
 fn split_package_version(dir_name: &str) -> (String, String) {
     let parts: Vec<&str> = dir_name.split('-').collect();
-    
+
     for i in 1..parts.len() {
         if let Some(first_char) = parts[i].chars().next() {
             if first_char.is_ascii_digit() {
@@ -86,7 +94,7 @@ fn split_package_version(dir_name: &str) -> (String, String) {
             }
         }
     }
-    
+
     (dir_name.to_string(), String::new())
 }
 
@@ -127,12 +135,11 @@ mod tests {
         assert_eq!(read_first_line(&file_path), Some("first line".to_string()));
         assert_eq!(read_first_line(dir.path().join("nonexistent")), None);
     }
-
 }
 
 /// Reads the first line of a file and trims it.
 fn read_first_line<P: AsRef<Path>>(path: P) -> Option<String> {
-    fs::read_to_string(path).ok().and_then(|content| {
-        content.lines().next().map(|s| s.trim().to_string())
-    })
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|content| content.lines().next().map(|s| s.trim().to_string()))
 }
