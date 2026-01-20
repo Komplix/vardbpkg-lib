@@ -1,6 +1,8 @@
+pub mod ebuild;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use crate::ebuild::EbuildData;
 
 /// Represents a package in the Gentoo vardb.
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -20,6 +22,7 @@ pub struct VarDbPkg {
     pub usepkg: String,
     pub eapi: String,
     pub binpkgmd5: String,
+    pub ebuild_data: EbuildData,
 }
 
 /// Parses the entire vardb at the given path.
@@ -59,8 +62,8 @@ fn parse_package_dir(category: &str, dir_name: &str, path: &Path) -> Option<VarD
 
     let mut pkg = VarDbPkg {
         category: category.to_string(),
-        package: package_name,
-        version,
+        package: package_name.clone(),
+        version: version.clone(),
         ..Default::default()
     };
 
@@ -76,6 +79,13 @@ fn parse_package_dir(category: &str, dir_name: &str, path: &Path) -> Option<VarD
     pkg.usepkg = read_first_line(path.join("USE")).unwrap_or_default();
     pkg.eapi = read_first_line(path.join("EAPI")).unwrap_or_default();
     pkg.binpkgmd5 = read_first_line(path.join("BINPKGMD5")).unwrap_or_default();
+
+    // Read ebuild file
+    let ebuild_filename = format!("{}-{}.ebuild", package_name, version);
+    let ebuild_path = path.join(ebuild_filename);
+    if let Ok(ebuild_data) = EbuildData::scan(ebuild_path) {
+        pkg.ebuild_data = ebuild_data;
+    }
 
     Some(pkg)
 }
@@ -134,6 +144,32 @@ mod tests {
 
         assert_eq!(read_first_line(&file_path), Some("first line".to_string()));
         assert_eq!(read_first_line(dir.path().join("nonexistent")), None);
+    }
+
+    #[test]
+    fn test_parse_package_dir_with_ebuild() {
+        let dir = tempdir().unwrap();
+        let pkg_path = dir.path().join("cat").join("pkg-1.2.3");
+        fs::create_dir_all(&pkg_path).unwrap();
+
+        // Create some metadata files
+        fs::write(pkg_path.join("EAPI"), "8\n").unwrap();
+        fs::write(pkg_path.join("DESCRIPTION"), "Test package\n").unwrap();
+
+        // Create the ebuild file
+        let ebuild_content = "MY_VAR=\"hello world\"\nEAPI=8\n";
+        fs::write(pkg_path.join("pkg-1.2.3.ebuild"), ebuild_content).unwrap();
+
+        let pkg = parse_package_dir("cat", "pkg-1.2.3", &pkg_path).unwrap();
+
+        assert_eq!(pkg.package, "pkg");
+        assert_eq!(pkg.version, "1.2.3");
+        assert_eq!(pkg.eapi, "8");
+        assert_eq!(pkg.description, "Test package");
+        
+        // Check ebuild_data
+        assert_eq!(pkg.ebuild_data["my_var"], "hello world");
+        assert_eq!(pkg.ebuild_data["eapi"], "8");
     }
 }
 
